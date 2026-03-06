@@ -1,0 +1,18 @@
+{
+  "name": "ticket-cabinet",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "shared",
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:gateway": "npm --workspace services/api-gateway run dev",
+    "dev:users": "npm --workspace services/user-service run dev",
+    "dev:events": "npm --workspace services/event-service run dev",
+    "dev:bookings": "npm --workspace services/booking-service run dev",
+    "dev:frontend": "npm --workspace frontend run dev"
+  }
+}

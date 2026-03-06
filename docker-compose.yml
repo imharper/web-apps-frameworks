@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: web
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d web"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    environment:
+      USER_SERVICE_PORT: 4001
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/web
+      JWT_SECRET: super_secret_key_change_me
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4001:4001"
+
+  event-service:
+    build:
+      context: .
+      dockerfile: services/event-service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/web
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4002:4002"
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: services/booking-service/Dockerfile
+    environment:
+      BOOKING_SERVICE_PORT: 4003
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/web
+      EVENT_SERVICE_URL: http://event-service:4002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      event-service:
+        condition: service_started
+    ports:
+      - "4003:4003"
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    environment:
+      GATEWAY_PORT: 4000
+      JWT_SECRET: super_secret_key_change_me
+      USER_SERVICE_URL: http://user-service:4001
+      EVENT_SERVICE_URL: http://event-service:4002
+      BOOKING_SERVICE_URL: http://booking-service:4003
+      FRONTEND_URL: http://localhost:8080
+    depends_on:
+      user-service:
+        condition: service_started
+      event-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:4000/api
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - "8080:80"
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    environment:
+      SWAGGER_JSON: /swagger/openapi.yaml
+    volumes:
+      - ./docs/openapi.yaml:/swagger/openapi.yaml:ro
+    ports:
+      - "8081:8080"
