@@ -25,6 +25,55 @@ main {
   box-shadow: 0 10px 25px rgba(18, 58, 104, 0.06);
 }
 
+.notification-island {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 1000;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 24px));
+}
+
+.notice {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(19, 34, 58, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.notice p {
+  margin: 6px 0 0;
+}
+
+.notice-error {
+  color: #7f1723;
+  border: 1px solid rgba(185, 28, 28, 0.16);
+  background: rgba(255, 242, 242, 0.96);
+}
+
+.notice-info {
+  color: #0f5132;
+  border: 1px solid rgba(22, 101, 52, 0.16);
+  background: rgba(240, 253, 244, 0.96);
+}
+
+.notice-close {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+}
+
 .auth-page {
   display: flex;
   justify-content: center;
@@ -79,6 +128,12 @@ main {
   min-height: 90px;
 }
 
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 16px;
+}
+
 .events-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -100,7 +155,19 @@ main {
 .booking-list {
   display: grid;
   gap: 8px;
-  padding-left: 18px;
+  padding-left: 0;
+  list-style: none;
+}
+
+.booking-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e4eaf6;
+  border-radius: 12px;
+  background: #fbfdff;
 }
 
 input,
@@ -125,6 +192,11 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.secondary-button {
+  background: #fff;
+  color: #1256a7;
+}
+
 .error {
   color: #b82020;
 }
@@ -133,10 +205,26 @@ button:disabled {
   color: #11620e;
 }
 
+.muted-text {
+  color: #5d6b80;
+}
+
 @media (max-width: 640px) {
+  .notification-island {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
   .topbar {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
+  }
+
+  .booking-item {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

@@ -5,7 +5,8 @@
   "workspaces": [
     "shared",
     "services/*",
-    "frontend"
+    "frontend",
+    "frontend-mobx"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
@@ -13,6 +14,7 @@
     "dev:users": "npm --workspace services/user-service run dev",
     "dev:events": "npm --workspace services/event-service run dev",
     "dev:bookings": "npm --workspace services/booking-service run dev",
-    "dev:frontend": "npm --workspace frontend run dev"
+    "dev:frontend": "npm --workspace frontend run dev",
+    "dev:frontend:mobx": "npm --workspace frontend-mobx run dev"
   }
 }

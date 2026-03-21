@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Booking, EventItem, User, UserRole } from "@shared";
-import { api } from "./api";
-
-const TOKEN_STORAGE_KEY = "ticket_cabinet_token";
+import type { UserRole } from "@shared";
+import { clearAuth, setToken } from "./authSlice";
+import { api, useCancelBookingMutation, useCreateBookingMutation, useCreateEventMutation, useGetBookingsQuery, useGetCurrentUserQuery, useGetEventsQuery, useLoginMutation, useRegisterMutation } from "./api";
+import { useAppDispatch, useAppSelector } from "./hooks";
+import NotificationIsland from "./NotificationIsland";
 
 type AuthMode = "login" | "register";
 
@@ -11,21 +12,18 @@ function formatDate(value: string) {
 }
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_STORAGE_KEY));
-  const [user, setUser] = useState<User | null>(null);
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [authMode, setAuthMode] = useState<AuthMode>("login");
-  const [error, setError] = useState<string>("");
-  const [info, setInfo] = useState<string>("");
+  const dispatch = useAppDispatch();
+  const token = useAppSelector((state) => state.auth.token);
 
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [authForm, setAuthForm] = useState({
     email: "",
     password: "",
     name: "",
     role: "user" as UserRole,
   });
-
   const [eventForm, setEventForm] = useState({
     title: "",
     description: "",
@@ -33,8 +31,21 @@ export default function App() {
     venue: "",
     capacity: 50,
   });
-
   const [qtyByEvent, setQtyByEvent] = useState<Record<string, number>>({});
+
+  const [login, loginState] = useLoginMutation();
+  const [register, registerState] = useRegisterMutation();
+  const [createEvent, createEventState] = useCreateEventMutation();
+  const [createBooking, createBookingState] = useCreateBookingMutation();
+  const [cancelBooking, cancelBookingState] = useCancelBookingMutation();
+
+  const userQuery = useGetCurrentUserQuery(undefined, { skip: !token });
+  const eventsQuery = useGetEventsQuery();
+  const bookingsQuery = useGetBookingsQuery(undefined, { skip: !token });
+
+  const user = userQuery.data ?? null;
+  const events = eventsQuery.data ?? [];
+  const bookings = bookingsQuery.data ?? [];
 
   const bookingsByEvent = useMemo(() => {
     const map = new Map<string, number>();
@@ -44,34 +55,29 @@ export default function App() {
     return map;
   }, [bookings]);
 
-  async function loadDashboard(currentToken: string) {
-    const [loadedEvents, loadedBookings] = await Promise.all([api.getEvents(), api.getBookings(currentToken)]);
-    setEvents(loadedEvents);
-    setBookings(loadedBookings);
-  }
+  const profileSummary = useMemo(() => {
+    const bookedEvents = bookings
+      .map((booking) => events.find((item) => item.id === booking.eventId)?.title)
+      .filter((title): title is string => Boolean(title));
+    const upcomingEvent = events[0]?.title || "Нет доступных мероприятий";
+
+    return {
+      totalBookings: bookings.length,
+      totalTickets: bookings.reduce((sum, booking) => sum + booking.quantity, 0),
+      bookedEvents,
+      upcomingEvent,
+    };
+  }, [bookings, events]);
 
   useEffect(() => {
-    async function bootstrap() {
-      if (!token) {
-        setUser(null);
-        setEvents([]);
-        setBookings([]);
-        return;
-      }
-
-      try {
-        const me = await api.me(token);
-        setUser(me);
-        await loadDashboard(token);
-      } catch (e) {
-        setToken(null);
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
-        setError(e instanceof Error ? e.message : "Ошибка авторизации");
-      }
+    if (!token || !userQuery.isError) {
+      return;
     }
 
-    bootstrap();
-  }, [token]);
+    dispatch(clearAuth());
+    dispatch(api.util.resetApiState());
+    setError("Сессия истекла. Выполните вход заново.");
+  }, [dispatch, token, userQuery.isError]);
 
   async function submitAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -81,17 +87,16 @@ export default function App() {
     try {
       const response =
         authMode === "login"
-          ? await api.login({ email: authForm.email, password: authForm.password })
-          : await api.register({
+          ? await login({ email: authForm.email, password: authForm.password }).unwrap()
+          : await register({
               email: authForm.email,
               password: authForm.password,
               name: authForm.name,
               role: authForm.role,
-            });
+            }).unwrap();
 
-      setToken(response.token);
-      setUser(response.user);
-      localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
+      dispatch(setToken(response.token));
+      dispatch(api.util.upsertQueryData("getCurrentUser", undefined, response.user));
       setInfo(authMode === "login" ? "Вход выполнен" : "Регистрация выполнена");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка аутентификации");
@@ -99,23 +104,20 @@ export default function App() {
   }
 
   function logout() {
-    setToken(null);
-    setUser(null);
+    dispatch(clearAuth());
+    dispatch(api.util.resetApiState());
     setError("");
     setInfo("Вы вышли из системы");
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
   }
 
   async function reserve(eventId: string) {
-    if (!token) {
+    if (!token || user?.role !== "user") {
+      setError("Бронирование доступно только пользователю");
       return;
     }
 
-    const quantity = qtyByEvent[eventId] || 1;
-
     try {
-      await api.createBooking({ eventId, quantity }, token);
-      await loadDashboard(token);
+      await createBooking({ eventId, quantity: qtyByEvent[eventId] || 1 }).unwrap();
       setInfo("Бронирование успешно создано");
       setError("");
     } catch (e) {
@@ -123,14 +125,28 @@ export default function App() {
     }
   }
 
-  async function createEvent(e: React.FormEvent) {
-    e.preventDefault();
-    if (!token) {
+  async function handleCancelBooking(bookingId: string) {
+    if (!token || user?.role !== "user") {
+      setError("Отмена бронирования доступна только пользователю");
       return;
     }
 
     try {
-      await api.createEvent(eventForm, token);
+      await cancelBooking(bookingId).unwrap();
+      setInfo("Бронирование отменено");
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка отмены бронирования");
+    }
+  }
+
+  async function handleCreateEvent(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setInfo("");
+
+    try {
+      await createEvent(eventForm).unwrap();
       setEventForm({
         title: "",
         description: "",
@@ -138,20 +154,18 @@ export default function App() {
         venue: "",
         capacity: 50,
       });
-      setEvents(await api.getEvents());
       setInfo("Мероприятие создано");
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка создания мероприятия");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка создания мероприятия");
     }
   }
 
   if (!token || !user) {
     return (
       <main className="auth-page">
+        <NotificationIsland error={error} info={info} onClearError={() => setError("")} onClearInfo={() => setInfo("")} />
         <section className="card auth-card">
-          <h1>Ticket Cabinet</h1>
-          <p>Личный кабинет системы бронирования билетов</p>
+          <h1>Ticket Cabinet Redux</h1>
 
           <div className="tabs">
             <button onClick={() => setAuthMode("login")} className={authMode === "login" ? "active" : ""}>
@@ -192,11 +206,11 @@ export default function App() {
               onChange={(e) => setAuthForm((prev) => ({ ...prev, password: e.target.value }))}
               required
             />
-            <button type="submit">{authMode === "login" ? "Войти" : "Создать аккаунт"}</button>
+            <button type="submit" disabled={loginState.isLoading || registerState.isLoading}>
+              {authMode === "login" ? "Войти" : "Создать аккаунт"}
+            </button>
           </form>
 
-          {error && <p className="error">{error}</p>}
-          {info && <p className="info">{info}</p>}
         </section>
       </main>
     );
@@ -204,9 +218,10 @@ export default function App() {
 
   return (
     <main className="dashboard">
+      <NotificationIsland error={error} info={info} onClearError={() => setError("")} onClearInfo={() => setInfo("")} />
       <header className="topbar card">
         <div>
-          <h1>Личный кабинет</h1>
+          <h1>Личный кабинет Redux</h1>
           <p>
             {user.name} ({user.email}) • роль: <strong>{user.role}</strong>
           </p>
@@ -214,13 +229,20 @@ export default function App() {
         <button onClick={logout}>Выйти</button>
       </header>
 
-      {error && <p className="error card">{error}</p>}
-      {info && <p className="info card">{info}</p>}
+      <section className="card">
+        <h2>Профиль</h2>
+        <div className="profile-grid">
+          <p>Ближайшее мероприятие: {profileSummary.upcomingEvent}</p>
+          <p>Всего бронирований: {profileSummary.totalBookings}</p>
+          <p>Всего билетов: {profileSummary.totalTickets}</p>
+        </div>
+      </section>
 
+      {(eventsQuery.isLoading || userQuery.isLoading || bookingsQuery.isLoading) && <p className="muted-text">Загрузка данных...</p>}
       {user.role === "admin" && (
         <section className="card">
           <h2>Создать мероприятие</h2>
-          <form onSubmit={createEvent} className="grid-form">
+          <form onSubmit={handleCreateEvent} className="grid-form">
             <input
               placeholder="Название"
               value={eventForm.title}
@@ -257,7 +279,9 @@ export default function App() {
               value={eventForm.description}
               onChange={(e) => setEventForm((prev) => ({ ...prev, description: e.target.value }))}
             />
-            <button type="submit">Создать</button>
+            <button type="submit" disabled={createEventState.isLoading}>
+              Создать
+            </button>
           </form>
         </section>
       )}
@@ -275,23 +299,25 @@ export default function App() {
                 Свободно мест: <strong>{event.availableSeats}</strong> / {event.capacity}
               </p>
               <p>Моих билетов: {bookingsByEvent.get(event.id) || 0}</p>
-              <div className="booking-controls">
-                <input
-                  type="number"
-                  min={1}
-                  max={Math.max(1, event.availableSeats)}
-                  value={qtyByEvent[event.id] || 1}
-                  onChange={(e) =>
-                    setQtyByEvent((prev) => ({
-                      ...prev,
-                      [event.id]: Math.max(1, Number(e.target.value) || 1),
-                    }))
-                  }
-                />
-                <button onClick={() => reserve(event.id)} disabled={event.availableSeats <= 0}>
-                  Забронировать
-                </button>
-              </div>
+              {user.role === "user" ? (
+                <div className="booking-controls">
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.max(1, event.availableSeats)}
+                    value={qtyByEvent[event.id] || 1}
+                    onChange={(e) =>
+                      setQtyByEvent((prev) => ({
+                        ...prev,
+                        [event.id]: Math.max(1, Number(e.target.value) || 1),
+                      }))
+                    }
+                  />
+                  <button onClick={() => reserve(event.id)} disabled={event.availableSeats <= 0 || createBookingState.isLoading}>
+                    Забронировать
+                  </button>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>
@@ -299,15 +325,22 @@ export default function App() {
 
       <section className="card">
         <h2>Мои бронирования</h2>
-        {bookings.length === 0 ? (
+        {user.role !== "user" ? (
+          <p className="muted-text">Для администратора бронирование и отмена бронирования недоступны.</p>
+        ) : bookings.length === 0 ? (
           <p>Бронирований пока нет</p>
         ) : (
           <ul className="booking-list">
             {bookings.map((booking) => (
-              <li key={booking.id}>
-                <strong>{events.find((item) => item.id === booking.eventId)?.title || booking.eventId}</strong>
-                <span> • Количество: {booking.quantity}</span>
-                <span> • Создано: {formatDate(booking.createdAt)}</span>
+              <li key={booking.id} className="booking-item">
+                <div>
+                  <strong>{events.find((item) => item.id === booking.eventId)?.title || booking.eventId}</strong>
+                  <span> • Количество: {booking.quantity}</span>
+                  <span> • Создано: {formatDate(booking.createdAt)}</span>
+                </div>
+                <button type="button" className="secondary-button" onClick={() => handleCancelBooking(booking.id)} disabled={cancelBookingState.isLoading}>
+                  Отменить
+                </button>
               </li>
             ))}
           </ul>

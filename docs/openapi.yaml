@@ -185,7 +185,7 @@ paths:
                 $ref: "#/components/schemas/ApiError"
     post:
       tags: [Bookings]
-      summary: Создание бронирования
+      summary: Создание бронирования (только user)
       security:
         - bearerAuth: []
       requestBody:
@@ -213,6 +213,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Администратор не может бронировать
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: Мероприятие не найдено
           content:
@@ -221,6 +227,50 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "409":
           description: Недостаточно мест
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Сервис мероприятий недоступен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/bookings/{id}:
+    delete:
+      tags: [Bookings]
+      summary: Отмена бронирования (только user)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Бронирование отменено
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "401":
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Администратор не может отменять бронирования
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Бронирование не найдено
           content:
             application/json:
               schema:

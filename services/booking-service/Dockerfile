@@ -3,6 +3,11 @@ WORKDIR /app
 
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/package.json shared/package.json
+COPY frontend/package.json frontend/package.json
+COPY frontend-mobx/package.json frontend-mobx/package.json
+COPY services/api-gateway/package.json services/api-gateway/package.json
+COPY services/user-service/package.json services/user-service/package.json
+COPY services/event-service/package.json services/event-service/package.json
 COPY services/booking-service/package.json services/booking-service/package.json
 
 RUN npm ci --workspace shared --workspace services/booking-service
@@ -18,6 +23,11 @@ ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
 COPY shared/package.json shared/package.json
+COPY frontend/package.json frontend/package.json
+COPY frontend-mobx/package.json frontend-mobx/package.json
+COPY services/api-gateway/package.json services/api-gateway/package.json
+COPY services/user-service/package.json services/user-service/package.json
+COPY services/event-service/package.json services/event-service/package.json
 COPY services/booking-service/package.json services/booking-service/package.json
 
 RUN npm ci --omit=dev --workspace shared --workspace services/booking-service

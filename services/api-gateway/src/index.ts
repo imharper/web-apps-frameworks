@@ -18,6 +18,8 @@ const USER_SERVICE_URL = process.env.USER_SERVICE_URL || "http://127.0.0.1:4001"
 const EVENT_SERVICE_URL = process.env.EVENT_SERVICE_URL || "http://127.0.0.1:4002";
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || "http://127.0.0.1:4003";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_MOBX_URL = process.env.FRONTEND_MOBX_URL || "http://localhost:5174";
+const allowedOrigins = [FRONTEND_URL, FRONTEND_MOBX_URL, "http://localhost:8080", "http://localhost:8081", "http://localhost:8082"];
 
 interface AuthenticatedRequest extends express.Request {
   user?: AuthPayload;
@@ -25,7 +27,7 @@ interface AuthenticatedRequest extends express.Request {
 
 app.use(
   cors({
-    origin: FRONTEND_URL,
+    origin: allowedOrigins,
     credentials: true,
   })
 );
@@ -128,8 +130,15 @@ app.get("/api/bookings", requireAuth, (req: AuthenticatedRequest, res) => {
   });
 });
 
-app.post("/api/bookings", requireAuth, (req: AuthenticatedRequest, res) => {
+app.post("/api/bookings", requireAuth, requireRole("user"), (req: AuthenticatedRequest, res) => {
   return proxyRequest(req, res, `${BOOKING_SERVICE_URL}/bookings`, {
+    "x-user-id": req.user!.sub,
+    "x-user-role": req.user!.role,
+  });
+});
+
+app.delete("/api/bookings/:id", requireAuth, requireRole("user"), (req: AuthenticatedRequest, res) => {
+  return proxyRequest(req, res, `${BOOKING_SERVICE_URL}/bookings/${req.params.id}`, {
     "x-user-id": req.user!.sub,
     "x-user-role": req.user!.role,
   });

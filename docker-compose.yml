@@ -68,6 +68,7 @@ services:
       EVENT_SERVICE_URL: http://event-service:4002
       BOOKING_SERVICE_URL: http://booking-service:4003
       FRONTEND_URL: http://localhost:8080
+      FRONTEND_MOBX_URL: http://localhost:8082
     depends_on:
       user-service:
         condition: service_started
@@ -89,6 +90,18 @@ services:
         condition: service_started
     ports:
       - "8080:80"
+
+  frontend-mobx:
+    build:
+      context: .
+      dockerfile: frontend-mobx/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:4000/api
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - "8082:80"
 
   swagger-ui:
     image: swaggerapi/swagger-ui:latest

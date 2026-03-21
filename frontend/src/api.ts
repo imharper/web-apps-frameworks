@@ -1,3 +1,4 @@
+import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
   AuthResponse,
   Booking,
@@ -8,65 +9,87 @@ import type {
   RegisterDto,
   User,
 } from "@shared";
+import type { RootState } from "./store";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
-async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+export const api = createApi({
+  reducerPath: "api",
+  baseQuery: fetchBaseQuery({
+    baseUrl: API_URL,
+    prepareHeaders: (headers, { getState }) => {
+      headers.set("Content-Type", "application/json");
 
-  if (init.headers) {
-    Object.assign(headers, init.headers as Record<string, string>);
-  }
+      const token = (getState() as RootState).auth.token;
+      if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
+      }
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers,
-  });
-
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
-
-  if (!response.ok) {
-    throw new Error(data?.error || "Ошибка запроса");
-  }
-
-  return data as T;
-}
-
-export const api = {
-  register: (payload: RegisterDto) =>
-    request<AuthResponse>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(payload),
+      return headers;
+    },
+  }),
+  keepUnusedDataFor: 60,
+  tagTypes: ["User", "Events", "Bookings"],
+  endpoints: (builder) => ({
+    register: builder.mutation<AuthResponse, RegisterDto>({
+      query: (body) => ({
+        url: "/auth/register",
+        method: "POST",
+        body,
+      }),
     }),
-
-  login: (payload: LoginDto) =>
-    request<AuthResponse>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify(payload),
+    login: builder.mutation<AuthResponse, LoginDto>({
+      query: (body) => ({
+        url: "/auth/login",
+        method: "POST",
+        body,
+      }),
     }),
+    getCurrentUser: builder.query<User, void>({
+      query: () => "/auth/me",
+      providesTags: ["User"],
+    }),
+    getEvents: builder.query<EventItem[], void>({
+      query: () => "/events",
+      providesTags: ["Events"],
+    }),
+    createEvent: builder.mutation<EventItem, CreateEventDto>({
+      query: (body) => ({
+        url: "/events",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Events"],
+    }),
+    getBookings: builder.query<Booking[], void>({
+      query: () => "/bookings",
+      providesTags: ["Bookings"],
+    }),
+    createBooking: builder.mutation<Booking, CreateBookingDto>({
+      query: (body) => ({
+        url: "/bookings",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Bookings", "Events"],
+    }),
+    cancelBooking: builder.mutation<Booking, string>({
+      query: (bookingId) => ({
+        url: `/bookings/${bookingId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Bookings", "Events"],
+    }),
+  }),
+});
 
-  me: (token: string) => request<User>("/auth/me", { method: "GET" }, token),
-
-  getEvents: () => request<EventItem[]>("/events", { method: "GET" }),
-
-  createEvent: (payload: CreateEventDto, token: string) =>
-    request<EventItem>("/events", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }, token),
-
-  getBookings: (token: string) => request<Booking[]>("/bookings", { method: "GET" }, token),
-
-  createBooking: (payload: CreateBookingDto, token: string) =>
-    request<Booking>("/bookings", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }, token),
-};
+export const {
+  useRegisterMutation,
+  useLoginMutation,
+  useGetCurrentUserQuery,
+  useGetEventsQuery,
+  useCreateEventMutation,
+  useGetBookingsQuery,
+  useCreateBookingMutation,
+  useCancelBookingMutation,
+} = api;

@@ -39,6 +39,14 @@ function toBooking(row: BookingRow): Booking {
   };
 }
 
+function ensureRegularUser(role: string | undefined): string | null {
+  if (role === "admin") {
+    return "Администратор не может создавать или отменять бронирования";
+  }
+
+  return null;
+}
+
 async function initDb(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS bookings (
@@ -85,8 +93,14 @@ app.get("/bookings", async (req, res) => {
 
 app.post("/bookings", async (req, res) => {
   const userId = req.header("x-user-id");
+  const userRole = req.header("x-user-role");
   if (!userId) {
     return res.status(401).json({ error: "Требуется пользователь" });
+  }
+
+  const roleError = ensureRegularUser(userRole);
+  if (roleError) {
+    return res.status(403).json({ error: roleError });
   }
 
   const body = req.body as CreateBookingDto;
@@ -145,6 +159,87 @@ app.post("/bookings", async (req, res) => {
 
     console.error("[booking-service] create error", error);
     return res.status(500).json({ error: "Не удалось создать бронирование" });
+  }
+});
+
+app.delete("/bookings/:id", async (req, res) => {
+  const userId = req.header("x-user-id");
+  const userRole = req.header("x-user-role");
+
+  if (!userId) {
+    return res.status(401).json({ error: "Требуется пользователь" });
+  }
+
+  const roleError = ensureRegularUser(userRole);
+  if (roleError) {
+    return res.status(403).json({ error: roleError });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const bookingQuery = await client.query<BookingRow>(
+      `
+      SELECT id, user_id, event_id, quantity, created_at
+      FROM bookings
+      WHERE id = $1 AND user_id = $2
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [req.params.id, userId]
+    );
+
+    const booking = bookingQuery.rows[0];
+    if (!booking) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Бронирование не найдено" });
+    }
+
+    let releaseResponse: Response;
+    try {
+      releaseResponse = await fetch(`${EVENT_SERVICE_URL}/internal/events/${booking.event_id}/release`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ quantity: booking.quantity }),
+      });
+    } catch (error) {
+      console.error("[booking-service] release call failed", error);
+      await client.query("ROLLBACK");
+      return res.status(502).json({ error: "Сервис мероприятий временно недоступен" });
+    }
+
+    if (!releaseResponse.ok) {
+      const error = (await releaseResponse.json()) as { error?: string };
+      await client.query("ROLLBACK");
+      return res.status(releaseResponse.status).json({ error: error.error || "Ошибка освобождения мест" });
+    }
+
+    const deletedBooking = await client.query<BookingRow>(
+      `
+      DELETE FROM bookings
+      WHERE id = $1 AND user_id = $2
+      RETURNING id, user_id, event_id, quantity, created_at
+      `,
+      [booking.id, userId]
+    );
+
+    await client.query("COMMIT");
+    return res.json(toBooking(deletedBooking.rows[0]));
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Ignore rollback errors and return the original failure.
+    }
+
+    console.error("[booking-service] cancel error", error);
+    return res.status(500).json({ error: "Не удалось отменить бронирование" });
+  } finally {
+    client.release();
   }
 });
 
