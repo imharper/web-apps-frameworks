@@ -67,3 +67,9 @@ export interface CreateBookingDto {
 export interface ApiError {
   error: string;
 }
+
+export interface MicrofrontendProps {
+  token: string;
+  currentUser: User;
+  onLogout: () => void;
+}

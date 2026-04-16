@@ -17,9 +17,18 @@ const JWT_SECRET = process.env.JWT_SECRET || "super_secret_key_change_me";
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || "http://127.0.0.1:4001";
 const EVENT_SERVICE_URL = process.env.EVENT_SERVICE_URL || "http://127.0.0.1:4002";
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || "http://127.0.0.1:4003";
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-const FRONTEND_MOBX_URL = process.env.FRONTEND_MOBX_URL || "http://localhost:5174";
-const allowedOrigins = [FRONTEND_URL, FRONTEND_MOBX_URL, "http://localhost:8080", "http://localhost:8081", "http://localhost:8082"];
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const FRONTEND_REDUX_URL = process.env.FRONTEND_REDUX_URL || "http://localhost:3001";
+const FRONTEND_MOBX_URL = process.env.FRONTEND_MOBX_URL || "http://localhost:3002";
+const allowedOrigins = [
+  FRONTEND_URL,
+  FRONTEND_REDUX_URL,
+  FRONTEND_MOBX_URL,
+  "http://localhost:8080",
+  "http://localhost:8081",
+  "http://localhost:8083",
+  "http://localhost:8084",
+];
 
 interface AuthenticatedRequest extends express.Request {
   user?: AuthPayload;

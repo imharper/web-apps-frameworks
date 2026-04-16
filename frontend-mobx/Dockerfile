@@ -6,6 +6,7 @@ ENV VITE_API_URL=${VITE_API_URL}
 
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/package.json shared/package.json
+COPY frontend-host/package.json frontend-host/package.json
 COPY frontend/package.json frontend/package.json
 COPY frontend-mobx/package.json frontend-mobx/package.json
 COPY services/api-gateway/package.json services/api-gateway/package.json

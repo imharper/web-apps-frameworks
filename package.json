@@ -5,6 +5,7 @@
   "workspaces": [
     "shared",
     "services/*",
+    "frontend-host",
     "frontend",
     "frontend-mobx"
   ],
@@ -14,7 +15,21 @@
     "dev:users": "npm --workspace services/user-service run dev",
     "dev:events": "npm --workspace services/event-service run dev",
     "dev:bookings": "npm --workspace services/booking-service run dev",
-    "dev:frontend": "npm --workspace frontend run dev",
+    "dev:frontend": "npm --workspace frontend-host run dev",
+    "dev:frontend:redux": "npm --workspace frontend run dev",
     "dev:frontend:mobx": "npm --workspace frontend-mobx run dev"
+  },
+  "devDependencies": {
+    "@types/node": "^24.8.1",
+    "@types/webpack-env": "^1.18.8",
+    "css-loader": "^7.1.2",
+    "dotenv-webpack": "^8.1.1",
+    "html-webpack-plugin": "^5.6.3",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.4",
+    "webpack": "^5.99.7",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.2",
+    "webpack-merge": "^6.0.1"
   }
 }

@@ -6,11 +6,12 @@ import type {
   CreateEventDto,
   EventItem,
   LoginDto,
+  MicrofrontendProps,
   RegisterDto,
   User,
 } from "@shared";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+const API_URL = process.env.VITE_API_URL || "http://localhost:4000/api";
 const TOKEN_STORAGE_KEY = "ticket_cabinet_mobx_token";
 const CACHE_TTL_MS = 60_000;
 
@@ -38,6 +39,7 @@ class AppStore {
   loadingBookings = false;
   mutatingBooking = false;
   mutatingEvent = false;
+  onSessionExpired: (() => void) | null = null;
   private cache: Record<CacheKey, number> = {
     user: 0,
     events: 0,
@@ -76,6 +78,13 @@ class AppStore {
   setToken(token: string) {
     this.token = token;
     localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  }
+
+  setSession({ token, currentUser, onLogout }: MicrofrontendProps) {
+    this.onSessionExpired = onLogout;
+    this.setToken(token);
+    this.currentUser = currentUser;
+    this.touch("user");
   }
 
   clearAuth() {
@@ -181,6 +190,7 @@ class AppStore {
           this.clearAuth();
           this.error = "Сессия истекла. Выполните вход заново.";
         });
+        this.onSessionExpired?.();
       }
       throw error;
     } finally {
